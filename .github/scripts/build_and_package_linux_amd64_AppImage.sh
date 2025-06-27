@@ -8,8 +8,9 @@ set -euo pipefail
 
 TAG_NAME="${1:-local}"
 ARCH="x86_64"
+ARCH_NAME="amd64"
 APPDIR="AppDir"
-OUTPUT_NAME="PactusGUI-${TAG_NAME}-linux-${ARCH}.AppImage"
+OUTPUT_NAME="PactusGUI-${TAG_NAME}-linux-${ARCH_NAME}.AppImage"
 PACTUS_CLI_URL="https://github.com/pactus-project/pactus/releases/download/v1.7.1/pactus-cli_1.7.1_linux_amd64.tar.gz"
 FINAL_CLI_DEST="$APPDIR/usr/bin/lib/src/core/native_resources/linux"
 LINUXDEPLOY_TOOL="linuxdeploy-x86_64.AppImage"
