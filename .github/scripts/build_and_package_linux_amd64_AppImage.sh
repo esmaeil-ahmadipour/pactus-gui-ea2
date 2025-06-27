@@ -6,35 +6,35 @@ set -euo pipefail
 # CONFIGURATION
 # --------------------------------------
 
-TAG_NAME="${1:-local}"  # Use first argument as tag or fallback to 'local'
-OUTPUT_NAME="PactusGUI-${TAG_NAME}-linux-amd64.AppImage"
+TAG_NAME="${1:-local}"
+ARCH="x86_64"
 APPDIR="AppDir"
+OUTPUT_NAME="PactusGUI-${TAG_NAME}-linux-${ARCH}.AppImage"
 PACTUS_CLI_URL="https://github.com/pactus-project/pactus/releases/download/v1.7.1/pactus-cli_1.7.1_linux_amd64.tar.gz"
 FINAL_CLI_DEST="$APPDIR/usr/bin/lib/src/core/native_resources/linux"
-
-LINUXDEPLOY_VERSION="v1.10.1"
-LINUXDEPLOY_URL="https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-LINUXDEPLOY_PLUGIN_GTK_URL="https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/3b67a1d1c1b0c8268f57f2bce40fe2d33d409cea/linuxdeploy-plugin-gtk.sh"
+LINUXDEPLOY_TOOL="linuxdeploy-x86_64.AppImage"
+GTK_PLUGIN="linuxdeploy-plugin-gtk.sh"
 
 # --------------------------------------
 # FUNCTIONS
 # --------------------------------------
 
 install_dependencies() {
-  echo "🔧 Installing dependencies..."
+  echo "🔧 Installing system dependencies..."
   sudo apt-get update
   sudo apt-get install -y \
-    libgtk-3-dev libfuse2 cmake ninja-build wget appstream tree desktop-file-utils patchelf || true
+    libgtk-3-dev libfuse2 cmake ninja-build wget \
+    appstream tree patchelf desktop-file-utils zsync
 }
 
 build_flutter_linux() {
-  echo "🔨 Building Flutter app for Linux AMD64..."
+  echo "🔨 Building Flutter app for Linux ${ARCH}..."
   flutter pub get
   flutter build linux --release
 }
 
 prepare_appdir() {
-  echo "📁 Preparing AppDir..."
+  echo "📁 Preparing AppDir structure..."
   rm -rf "$APPDIR"
   mkdir -p "$APPDIR/usr/bin"
 
@@ -42,19 +42,14 @@ prepare_appdir() {
   cp linux/pactus_gui.desktop "$APPDIR/"
   cp linux/pactus_gui.png "$APPDIR/"
 
-  # Ensure the main binary is executable
-  chmod +x "$APPDIR/usr/bin/pactus_gui"
-
-  echo "✏️ Creating custom AppRun..."
+  echo "✏️ Creating AppRun launcher..."
   cat << 'EOF' > "$APPDIR/AppRun"
 #!/bin/bash
-set -e
 HERE="$(dirname "$(readlink -f "$0")")"
 export PACTUS_NATIVE_RESOURCES="$HERE/usr/bin/lib/src/core/native_resources/linux"
-echo "PACTUS_NATIVE_RESOURCES=$PACTUS_NATIVE_RESOURCES"
-echo "Running: $HERE/usr/bin/pactus_gui $*"
 exec "$HERE/usr/bin/pactus_gui" "$@"
 EOF
+
   chmod +x "$APPDIR/AppRun"
 }
 
@@ -62,28 +57,34 @@ download_and_extract_pactus_cli() {
   echo "⬇️ Downloading pactus-cli..."
   wget -q "$PACTUS_CLI_URL" -O pactus-cli.tar.gz
 
-  echo "📦 Extracting pactus-cli..."
-  mkdir -p "$FINAL_CLI_DEST"
-  tar -xzvf pactus-cli.tar.gz --strip-components=1 -C "$FINAL_CLI_DEST"
+  TEMP_EXTRACT_DIR="pactus-cli-temp"
+  rm -rf "$TEMP_EXTRACT_DIR"
+  mkdir -p "$TEMP_EXTRACT_DIR"
+  tar -xzvf pactus-cli.tar.gz --strip-components=1 -C "$TEMP_EXTRACT_DIR"
 
-  # Make sure extracted binaries are executable
-  find "$FINAL_CLI_DEST" -type f -exec chmod +x {} +
+  echo "🚚 Moving CLI to: $FINAL_CLI_DEST"
+  mkdir -p "$FINAL_CLI_DEST"
+  mv "$TEMP_EXTRACT_DIR"/* "$FINAL_CLI_DEST"/
+  rm -rf "$TEMP_EXTRACT_DIR"
 }
 
-download_linuxdeploy_and_plugins() {
-  echo "⬇️ Downloading linuxdeploy..."
-  wget -q "$LINUXDEPLOY_URL" -O linuxdeploy-x86_64.AppImage
-  chmod +x linuxdeploy-x86_64.AppImage
+download_linuxdeploy() {
+  echo "⬇️ Downloading linuxdeploy and GTK plugin..."
+  wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/${LINUXDEPLOY_TOOL}"
+  chmod +x "${LINUXDEPLOY_TOOL}"
 
-  echo "⬇️ Downloading linuxdeploy-plugin-gtk..."
-  wget -q "$LINUXDEPLOY_PLUGIN_GTK_URL" -O linuxdeploy-plugin-gtk.sh
-  chmod +x linuxdeploy-plugin-gtk.sh
+  wget -q "https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/${GTK_PLUGIN}"
+  chmod +x "${GTK_PLUGIN}"
 }
 
 build_appimage() {
-  echo "📦 Building AppImage with linuxdeploy and gtk plugin..."
+  echo "📦 Building AppImage with linuxdeploy..."
 
-  ./linuxdeploy-x86_64.AppImage \
+  export ARCH=${ARCH}
+  export OUTPUT=appimage
+  export VERBOSE=1
+
+  ./"${LINUXDEPLOY_TOOL}" \
     --appdir "$APPDIR" \
     --desktop-file "$APPDIR/pactus_gui.desktop" \
     --icon-file "$APPDIR/pactus_gui.png" \
@@ -91,20 +92,27 @@ build_appimage() {
     --output appimage
 
   GENERATED_APPIMAGE=$(find . -maxdepth 1 -type f -name "*.AppImage" | head -n 1)
-
   if [[ ! -f "$GENERATED_APPIMAGE" ]]; then
-    echo "❌ AppImage build failed: No AppImage file found."
+    echo "❌ AppImage build failed!"
     exit 1
   fi
 
   mkdir -p artifacts
   TARGET_PATH="artifacts/${OUTPUT_NAME}"
 
-  echo "📦 Moving $GENERATED_APPIMAGE to $TARGET_PATH"
+  echo "📦 Moving AppImage to $TARGET_PATH"
   mv "$GENERATED_APPIMAGE" "$TARGET_PATH"
   chmod +x "$TARGET_PATH"
 
-  echo "✅ AppImage saved to $TARGET_PATH"
+  echo "✅ AppImage created: $TARGET_PATH"
+
+  echo "🔍 Verifying contents..."
+  cp "$TARGET_PATH" unpack-test.AppImage
+  chmod +x unpack-test.AppImage
+  ./unpack-test.AppImage --appimage-extract
+
+  echo "📂 Extracted contents:"
+  tree squashfs-root/
 }
 
 # --------------------------------------
@@ -115,5 +123,5 @@ install_dependencies
 build_flutter_linux
 prepare_appdir
 download_and_extract_pactus_cli
-download_linuxdeploy_and_plugins
+download_linuxdeploy
 build_appimage
