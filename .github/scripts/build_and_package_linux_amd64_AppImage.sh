@@ -11,10 +11,7 @@ OUTPUT_NAME="PactusGUI-${TAG_NAME}-linux-amd64.AppImage"
 APPDIR="AppDir"
 PACTUS_CLI_URL="https://github.com/pactus-project/pactus/releases/download/v1.7.1/pactus-cli_1.7.1_linux_amd64.tar.gz"
 FINAL_CLI_DEST="$APPDIR/usr/bin/lib/src/core/native_resources/linux"
-
-LINUXDEPLOY_VERSION="v1.10.1"
-LINUXDEPLOY_URL="https://github.com/linuxdeploy/linuxdeploy/releases/download/${LINUXDEPLOY_VERSION}/linuxdeploy-x86_64.AppImage"
-LINUXDEPLOY_PLUGIN_GTK_URL="https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/download/${LINUXDEPLOY_VERSION}/linuxdeploy-plugin-gtk.sh"
+APPIMAGE_TOOL="linuxdeploy-x86_64.AppImage"
 
 # --------------------------------------
 # FUNCTIONS
@@ -71,17 +68,14 @@ download_and_extract_pactus_cli() {
 }
 
 download_linuxdeploy_and_plugins() {
-  echo "⬇️ Downloading linuxdeploy v${LINUXDEPLOY_VERSION}..."
-  wget -q "$LINUXDEPLOY_URL" -O linuxdeploy-x86_64.AppImage
-  chmod +x linuxdeploy-x86_64.AppImage
-
-  echo "⬇️ Downloading linuxdeploy-plugin-gtk v${LINUXDEPLOY_VERSION}..."
-  wget -q "$LINUXDEPLOY_PLUGIN_GTK_URL" -O linuxdeploy-plugin-gtk.sh
-  chmod +x linuxdeploy-plugin-gtk.sh
+  echo "⬇️ Downloading AppImageTool for AMD64..."
+  wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/${APPIMAGE_TOOL}
+  chmod +x "${APPIMAGE_TOOL}"
 }
 
 build_appimage() {
-  echo "📦 Building AppImage with linuxdeploy and gtk plugin..."
+  echo "🚀 Building AppImage with ${APPIMAGE_TOOL}..."
+  ARCH=x86_64 ./${APPIMAGE_TOOL} "$APPDIR"
 
   ./linuxdeploy-x86_64.AppImage \
     --appdir "$APPDIR" \
@@ -105,6 +99,12 @@ build_appimage() {
   chmod +x "$TARGET_PATH"
 
   echo "✅ AppImage saved to $TARGET_PATH"
+
+  echo "🔍 Verifying contents..."
+  cp "artifacts/$OUTPUT_NAME" unpack-test.AppImage
+  chmod +x unpack-test.AppImage
+  ./unpack-test.AppImage --appimage-extract
+  tree squashfs-root/
 }
 
 # --------------------------------------
