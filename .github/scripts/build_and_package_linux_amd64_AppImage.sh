@@ -13,8 +13,7 @@ APPDIR="AppDir"
 OUTPUT_NAME="PactusGUI-${TAG_NAME}-linux-${ARCH_NAME}.AppImage"
 PACTUS_CLI_URL="https://github.com/pactus-project/pactus/releases/download/v1.7.1/pactus-cli_1.7.1_linux_amd64.tar.gz"
 FINAL_CLI_DEST="$APPDIR/usr/bin/lib/src/core/native_resources/linux"
-LINUXDEPLOY_TOOL="linuxdeploy-x86_64.AppImage"
-GTK_PLUGIN="linuxdeploy-plugin-gtk.sh"
+APPIMAGE_TOOL="appimagetool-x86_64.AppImage"
 
 # --------------------------------------
 # FUNCTIONS
@@ -69,28 +68,15 @@ download_and_extract_pactus_cli() {
   rm -rf "$TEMP_EXTRACT_DIR"
 }
 
-download_linuxdeploy() {
-  echo "⬇️ Downloading linuxdeploy and GTK plugin..."
-  wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/${LINUXDEPLOY_TOOL}"
-  chmod +x "${LINUXDEPLOY_TOOL}"
-
-  wget -q "https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/${GTK_PLUGIN}"
-  chmod +x "${GTK_PLUGIN}"
+download_appimagetool() {
+  echo "⬇️ Downloading AppImageTool for x86_64..."
+  wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/${APPIMAGE_TOOL}"
+  chmod +x "${APPIMAGE_TOOL}"
 }
 
 build_appimage() {
-  echo "📦 Building AppImage with linuxdeploy..."
-
-  export ARCH=${ARCH}
-  export OUTPUT=appimage
-  export VERBOSE=1
-
-  ./"${LINUXDEPLOY_TOOL}" \
-    --appdir "$APPDIR" \
-    --desktop-file "$APPDIR/pactus_gui.desktop" \
-    --icon-file "$APPDIR/pactus_gui.png" \
-    --plugin gtk \
-    --output appimage
+  echo "🚀 Building AppImage with ${APPIMAGE_TOOL}..."
+  ARCH=${ARCH} ./${APPIMAGE_TOOL} "$APPDIR"
 
   GENERATED_APPIMAGE=$(find . -maxdepth 1 -type f -name "*.AppImage" | head -n 1)
   if [[ ! -f "$GENERATED_APPIMAGE" ]]; then
@@ -99,20 +85,15 @@ build_appimage() {
   fi
 
   mkdir -p artifacts
-  TARGET_PATH="artifacts/${OUTPUT_NAME}"
+  mv "$GENERATED_APPIMAGE" "artifacts/$OUTPUT_NAME"
+  chmod +x "artifacts/$OUTPUT_NAME"
 
-  echo "📦 Moving AppImage to $TARGET_PATH"
-  mv "$GENERATED_APPIMAGE" "$TARGET_PATH"
-  chmod +x "$TARGET_PATH"
-
-  echo "✅ AppImage created: $TARGET_PATH"
+  echo "✅ AppImage created: artifacts/$OUTPUT_NAME"
 
   echo "🔍 Verifying contents..."
-  cp "$TARGET_PATH" unpack-test.AppImage
+  cp "artifacts/$OUTPUT_NAME" unpack-test.AppImage
   chmod +x unpack-test.AppImage
   ./unpack-test.AppImage --appimage-extract
-
-  echo "📂 Extracted contents:"
   tree squashfs-root/
 }
 
@@ -124,5 +105,5 @@ install_dependencies
 build_flutter_linux
 prepare_appdir
 download_and_extract_pactus_cli
-download_linuxdeploy
+download_appimagetool
 build_appimage
